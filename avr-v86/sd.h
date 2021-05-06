@@ -1,6 +1,6 @@
 /*
-    avr-v86 - i8086 emulator running on Arduino UNO
-    Copyright (C) 2021  @raspiduino
+    avr-v86 - Intel(R) 8086 emulator running on Arduino UNO
+    Copyright (C) 2021 @raspiduino
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,3 +15,20 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
+#include <Fat16.h> // Fat16 library, you can get it at https://github.com/greiman/Fat16
+#include "config.h"
+
+void sdinit();
+void loadbios();
+
+#ifdef HARDDISK
+unsigned short hdsize();
+#endif
+
+unsigned char readmem(unsigned short addr);
+void writemem(unsigned short addr, unsigned short value);
+unsigned short readregs(unsigned short addr);
+void writeregs(unsigned short addr, unsigned short value);
+
+unsigned char bios_table_lookup(unsigned int i, unsigned int j);
