@@ -82,7 +82,7 @@ unsigned char readmem(unsigned short addr)
     return val; // Return that value
 }
 
-void writemem(unsigned short addr, unsigned char value)
+void writemem(unsigned short addr, unsigned short value)
 {
     // Write the value to memory at the addr
     file.open(RAM_FILE, O_WRITE); // Open virtual ram file in write mode

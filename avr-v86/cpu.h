@@ -20,4 +20,5 @@
 #include "sd.h"
 
 void set_opcode(unsigned char opcode);
+void r_m_push(unsigned short a);
 void v86();

@@ -22,27 +22,31 @@
 #define CAST(a) *(a*)&
 
 // Emulator vars
-unsigned char *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar;
+unsigned char tmpvar1, tmpvar2,*opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar;
 unsigned short reg_ip;
-unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr;
+unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source;
+int op_result;
 
 // Helper macros
 
 // Convert segment:offset to linear address in emulator memory space
-#define SEGREG(reg_seg,reg_ofs,op) 16 * readregs(reg_seg) + (unsigned short)(op readregs(reg_ofs))
+#define SEGREG(reg_seg,reg_ofs,op) 16 * readregs(reg_seg) + (unsigned short)(readregs(reg_ofs)op)
 
 // Return memory-mapped register location (offset into mem array) for register #reg_id
 #define GET_REG_ADDR(reg_id) (REGS_BASE + (i_w ? 2 * reg_id : 2 * reg_id + reg_id / 4 & 7))
 
 // Decode mod, r_m and reg fields in instruction
 #define DECODE_RM_REG scratch2_uint = 4 * !i_mod, \
-                      op_to_addr = rm_addr = i_mod < 3 ? SEGREG(seg_override_en ? seg_override : bios_table_lookup(scratch2_uint + 3, i_rm), bios_table_lookup(scratch2_uint, i_rm), readregs(bios_table_lookup(scratch2_uint + 1, i_rm)) + bios_table_lookup(scratch2_uint + 2, i_rm) * i_data1+) : GET_REG_ADDR(i_rm), \
+                      op_to_addr = rm_addr = i_mod < 3 ? SEGREG(seg_override_en ? seg_override : bios_table_lookup(scratch2_uint + 3, i_rm), bios_table_lookup(scratch2_uint, i_rm), +readregs(bios_table_lookup(scratch2_uint + 1, i_rm))+bios_table_lookup(scratch2_uint + 2, i_rm)*i_data1) : GET_REG_ADDR(i_rm), \
                       op_from_addr = GET_REG_ADDR(i_reg), \
                       i_d && (scratch_uint = op_from_addr, op_from_addr = rm_addr, op_to_addr = scratch_uint)
 
 // Opcode execution unit helpers
 #define OPCODE ;break; case
 #define OPCODE_CHAIN ; case
+
+#define R_M_OP(dest,op,src) (i_w ? op_dest = CAST(unsigned short)dest, op_result = CAST(unsigned short)dest op (op_source = CAST(unsigned short)src) \
+                                 : (op_dest = dest, op_result = dest op (op_source = CAST(unsigned char)src)))
 
 // Convert raw opcode to translated opcode index. This condenses a large number of different encodings of similar
 // instructions into a much smaller number of distinct functions, which we then execute
@@ -52,6 +56,29 @@ void set_opcode(unsigned char opcode)
     extra = bios_table_lookup(TABLE_XLAT_SUBFUNCTION, opcode);
     i_mod_size = bios_table_lookup(TABLE_I_MOD_SIZE, opcode);
     set_flags_type = bios_table_lookup(TABLE_STD_FLAGS, opcode);
+}
+
+// Helpers for stack operations
+void r_m_push(unsigned short a)
+{
+    i_w = 1;
+    tmpvar1 = tmpvar2 = readmem(SEGREG(REG_SS, REG_SP, -1));
+    R_M_OP(tmpvar1, =, a);
+    if (tmpvar1 != tmpvar2)
+    {
+        writemem(SEGREG(REG_SS, REG_SP, -1), tmpvar1);
+    }
+}
+void r_m_pop(unsigned short a)
+{
+    i_w = 1;
+    writeregs(REG_SP, readregs(REG_SP) + 2);
+    tmpvar1 = tmpvar2 = readmem(SEGREG(REG_SS, REG_SP, -2));
+    R_M_OP(a, =, tmpvar1);
+    if (tmpvar1 != tmpvar2)
+    {
+        writemem(SEGREG(REG_SS, REG_SP, -2), tmpvar1);
+    }
 }
 
 void v86()
@@ -121,7 +148,25 @@ void v86()
                 // i_w is the invert flag, e.g. i_w == 1 means JNAE, whereas i_w == 0 means JAE 
                 scratch_uchar = raw_opcode_id / 2 & 7;
                 reg_ip += (char)i_data0 * (i_w ^ ((unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_A, scratch_uchar)) || (unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_B, scratch_uchar)) || (unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_C, scratch_uchar)) ^ (unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_D, scratch_uchar))));
-
+            OPCODE 1: // MOV reg, imm
+                i_w = !!(raw_opcode_id & 8);
+                tmpvar1 = tmpvar2 = readmem(GET_REG_ADDR(i_reg4bit));
+                R_M_OP(tmpvar1, =, i_data0);
+                if (tmpvar1 != tmpvar2)
+                {
+                    writemem(GET_REG_ADDR(i_reg4bit), tmpvar1);
+                }
+            OPCODE 3: // PUSH regs16
+                r_m_push(readregs(i_reg4bit));
+            OPCODE 4: // POP regs16
+                r_m_pop(readregs(i_reg4bit));
+            OPCODE 2: // INC|DEC regs16
+                i_w = 1;
+                i_d = 0;
+                i_reg = i_reg4bit;
+                DECODE_RM_REG;
+                i_reg = extra;
+            
         }
     }
 }
