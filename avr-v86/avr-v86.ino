@@ -42,8 +42,14 @@
     text mode. The full instruction will be included in each of these functions.
     --------------------------------------------------------------------------------------
     CREDITS
-    Super thanks to Adrian Cable (https://github.com/adriancable) and 
+    Super thanks to:
+    - Adrian Cable (https://github.com/adriancable) and 
     8086tiny (https://github.com/adriancable/8086tiny) contributers
+
+    - Bill Greiman (https://github.com/greiman) and
+    Fat16 (https://github.com/greiman/Fat16) contributers
+
+    avr-v86 is mostly based on 8086tiny project!
 */
 
 #include "cpu.h"
@@ -62,7 +68,7 @@ void setup() {
     v86();
 
     // If the emulator quit
-    Serial.println(F("Machine halted!"));
+    Serial.println(F("Machine halted!")); // This probably never happend!
 }
 
 void loop() {
