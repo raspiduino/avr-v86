@@ -30,4 +30,5 @@ unsigned short segreg(int reg_seg, int reg_ofs, int op);
 void make_flags();
 char pc_interrupt(unsigned char interrupt_num);
 void set_flags(int new_flags);
+int AAA_AAS(char which_operation);
 void v86();

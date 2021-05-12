@@ -79,6 +79,9 @@ int op_result, scratch_int;
 // Increment or decrement a register #reg_id (usually SI or DI), depending on direction flag and operand size (given by i_w)
 #define INDEX_INC(reg_id) writeregs16(reg_id, (readregs16(reg_id) - (2 * readregs8(FLAG_DF) - 1)*(i_w + 1)))
 
+// Returns sign bit of an 8-bit or 16-bit operand
+#define SIGN_OF(a) (1 & (i_w ? CAST(short)a : a) >> (TOP_BIT - 1))
+
 // Convert raw opcode to translated opcode index. This condenses a large number of different encodings of similar
 // instructions into a much smaller number of distinct functions, which we then execute
 void set_opcode(unsigned char opcode)
@@ -179,6 +182,20 @@ void set_flags(int new_flags)
 {
     for (int i = 9; i--;)
         writeregs8(FLAG_CF + i, !!(1 << bios_table_lookup(TABLE_FLAGS_BITFIELDS, i) & new_flags));
+}
+
+// AAA and AAS instructions - which_operation is +1 for AAA, and -1 for AAS
+int AAA_AAS(char which_operation)
+{
+    tmpvar1 = readregs16(REG_AX);
+    tmpvar1 += 262 * which_operation*set_AF(set_CF(((readregs8(REG_AL) & 0x0F) > 9) || readregs8(FLAG_AF)));
+    writeregs16(REG_AX, tmpvar1);
+
+    tmpvar2 = readregs8(REG_AL);
+    tmpvar2 &= 0x0F;
+    writeregs8(REG_AL, tmpvar2);
+
+    return tmpvar1;
 }
 
 void v86()
@@ -466,7 +483,70 @@ void v86()
             OPCODE 28: // DAA/DAS
                 i_w = 0;
                 extra ? DAA_DAS(-=, >=, 0xFF, 0x99) : DAA_DAS(+=, <, 0xF0, 0x90); // extra = 0 for DAA, 1 for DAS
-            
+            OPCODE 29: // AAA/AAS
+                op_result = AAA_AAS(extra - 1);
+            OPCODE 30: // CBW
+                tmpvar1 = readregs8(REG_AL);
+                writeregs8(REG_AH, -SIGN_OF(tmpvar1));
+            OPCODE 31: // CWD
+                tmpvar1 = readregs16(REG_AX);
+                writeregs16(REG_DX, -SIGN_OF(tmpvar1));
+            OPCODE 32: // CALL FAR imm16:imm16
+                r_m_push(readregs16(REG_CS));
+                r_m_push(reg_ip + 5);
+                writeregs16(REG_CS, i_data2);
+                reg_ip = i_data0;
+            OPCODE 33: // PUSHF
+                make_flags();
+                r_m_push(scratch_uint);
+            OPCODE 34: // POPF
+                set_flags(r_m_pop(scratch_uint));
+            OPCODE 35: // SAHF
+                make_flags();
+                set_flags((scratch_uint & 0xFF00) + readregs8(REG_AH));
+            OPCODE 36: // LAHF
+                make_flags(),
+                writeregs8(REG_AH, scratch_uint);
+            OPCODE 37: // LES|LDS reg, r/m
+                i_w = i_d = 1;
+                DECODE_RM_REG;
+                OP(=);
+                MEM_OP(REGS_BASE + extra, =, rm_addr + 2);
+            OPCODE 38: // INT 3
+                ++reg_ip;
+                pc_interrupt(3);
+            OPCODE 39: // INT imm8
+                reg_ip += 2;
+                pc_interrupt(i_data0);
+            OPCODE 40: // INTO
+                ++reg_ip;
+                readregs8(FLAG_OF) && pc_interrupt(4);
+            OPCODE 41: // AAM
+                if (i_data0 &= 0xFF)
+                    writeregs8(REG_AH, readregs8(REG_AL) / i_data0),
+                    tmpvar1 = readregs8(REG_AL),
+                    op_result = tmpvar1 %= i_data0,
+                    writeregs8(REG_AL, tmpvar1);
+                else // Divide by zero
+                    pc_interrupt(0);
+            OPCODE 42: // AAD
+                i_w = 0;
+                op_result = 0xFF & readregs8(REG_AL) + i_data0 * readregs8(REG_AH);
+                writeregs16(REG_AX, op_result);
+            OPCODE 43: // SALC
+                writeregs8(REG_AL, -readregs8(FLAG_CF));
+            OPCODE 44: // XLAT
+                writeregs8(REG_AL, readmem(segreg(seg_override_en ? seg_override : REG_DS, REG_BX, readregs8(REG_AL))));
+            OPCODE 45: // CMC
+                tmpvar1 = readregs8(FLAG_CF);
+                tmpvar1 ^= 1;
+                writeregs8(FLAG_CF, tmpvar1);
+            OPCODE 46: // CLC|STC|CLI|STI|CLD|STD
+                writeregs8(extra / 2, extra & 1);
+            OPCODE 47: // TEST AL/AX, immed
+                tmpvar1 = readregs8(REG_AL);
+                R_M_OP(tmpvar1, &, i_data0);
+                writeregs8(REG_AL, tmpvar1);
         }
     }
 }
