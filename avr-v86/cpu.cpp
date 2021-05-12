@@ -547,6 +547,37 @@ void v86()
                 tmpvar1 = readregs8(REG_AL);
                 R_M_OP(tmpvar1, &, i_data0);
                 writeregs8(REG_AL, tmpvar1);
+            OPCODE 48: // Emulator-specific 0F xx opcodes
+                switch ((char)i_data0)
+                {
+                    OPCODE_CHAIN 0: // PUTCHAR_AL
+                        terminal_putchar(readregs8(REG_AL));
+                    //OPCODE 1: // GET_RTC
+                        // Not yet :) How can we get time from Arduino????
+                    //OPCODE 2: // DISK_READ
+                    //OPCODE_CHAIN 3: // DISK_WRITE
+                    //    regs8[REG_AL] = ~lseek(disk[regs8[REG_DL]], CAST(unsigned)regs16[REG_BP] << 9, 0)
+                    //        ? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk[regs8[REG_DL]], mem + SEGREG(REG_ES, REG_BX,), regs16[REG_AX])
+                    //        : 0;
+                }
+        }
+
+        // Increment instruction pointer by computed instruction length. Tables in the BIOS binary
+        // help us here.
+        reg_ip += (i_mod*(i_mod != 3) + 2*(!i_mod && i_rm == 6))*i_mod_size + bios_table_lookup(TABLE_BASE_INST_SIZE, raw_opcode_id) + bios_table_lookup(TABLE_I_W_SIZE, raw_opcode_id)*(i_w + 1);
+
+        // If instruction needs to update SF, ZF and PF, set them as appropriate
+        if (set_flags_type & FLAGS_UPDATE_SZP)
+        {
+            writeregs8(FLAG_SF, SIGN_OF(op_result));
+            writeregs8(FLAG_ZF, !op_result);
+            writeregs8(FLAG_PF, bios_table_lookup(TABLE_PARITY_FLAG, (unsigned char)op_result));
+
+            // If instruction is an arithmetic or logic operation, also set AF/OF/CF as appropriate.
+            if (set_flags_type & FLAGS_UPDATE_AO_ARITH)
+                set_AF_OF_arith();
+            if (set_flags_type & FLAGS_UPDATE_OC_LOGIC)
+                set_CF(0), set_OF(0);
         }
     }
 }

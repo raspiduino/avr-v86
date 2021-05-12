@@ -17,3 +17,8 @@
 */
 
 #include "devices.h"
+
+void terminal_putchar(unsigned char value)
+{
+    Serial.print((char)value);
+}

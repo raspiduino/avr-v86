@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "sd.h"
+#include "devices.h"
 
 void set_opcode(unsigned char opcode);
 unsigned char r_m_push(unsigned short a);

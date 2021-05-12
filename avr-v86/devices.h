@@ -16,4 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <Arduino.h>
 #include "config.h"
+
+void terminal_putchar(unsigned char value);
