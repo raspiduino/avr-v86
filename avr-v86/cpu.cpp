@@ -384,7 +384,72 @@ void v86()
                 i_data1 = i_data0;
                 DECODE_RM_REG;
                 MEM_OP(op_from_addr, =, op_to_addr);
-            // OPCODE 12 here, come back later. It's too long and I'm too lazy!
+            OPCODE 12: // ROL|ROR|RCL|RCR|SHL|SHR|???|SAR reg/mem, 1/CL/imm (80186)
+                tmpvar1 = readmem(rm_addr);
+                scratch2_uint = SIGN_OF(tmpvar1),
+                scratch_uint = extra ? // xxx reg/mem, imm
+                    ++reg_ip,
+                    (char)i_data1
+                : // xxx reg/mem, CL
+                    i_d
+                        ? 31 & readregs8(REG_CL)
+                : // xxx reg/mem, 1
+                    1;
+                if (scratch_uint)
+                {
+                    if (i_reg < 4) // Rotate operations
+                        scratch_uint %= i_reg / 2 + TOP_BIT,
+                        tmpvar1 = readmem(rm_addr),
+                        R_M_OP(scratch2_uint, =, tmpvar1);
+                    if (i_reg & 1) // Rotate/shift right operations
+                        tmpvar1 = readmem(rm_addr);
+                        R_M_OP(tmpvar1, >>=, scratch_uint);
+                        writemem(rm_addr, tmpvar1);
+                    if (i_reg > 3) // Shift operations
+                        set_opcode(0x10); // Decode like ADC
+                    if (i_reg > 4) // SHR or SAR
+                        set_CF(op_dest >> (scratch_uint - 1) & 1);
+                    else // Rotate/shift left operations
+                        tmpvar1 = readmem(rm_addr);
+                        R_M_OP(tmpvar1, <<=, scratch_uint);
+                        writemem(rm_addr, tmpvar1);
+                }
+
+                switch (i_reg)
+                {
+                    OPCODE_CHAIN 0: // ROL
+                        tmpvar1 = readmem(rm_addr);
+                        R_M_OP(tmpvar1, += , scratch2_uint >> (TOP_BIT - scratch_uint));
+                        writemem(rm_addr, tmpvar1);
+                        set_OF(SIGN_OF(op_result) ^ set_CF(op_result & 1))
+                    OPCODE 1: // ROR
+                        scratch2_uint &= (1 << scratch_uint) - 1,
+                        tmpvar1 = readmem(rm_addr),
+                        R_M_OP(tmpvar1, += , scratch2_uint << (TOP_BIT - scratch_uint));
+                        writemem(rm_addr, tmpvar1);
+                        set_OF(SIGN_OF(op_result * 2) ^ set_CF(SIGN_OF(op_result)));
+                    OPCODE 2: // RCL
+                        tmpvar1 = readmem(rm_addr);
+                        R_M_OP(tmpvar1, += (readregs8(FLAG_CF) << (scratch_uint - 1)) + , scratch2_uint >> (1 + TOP_BIT - scratch_uint));
+                        writemem(rm_addr, tmpvar1);
+                        set_OF(SIGN_OF(op_result) ^ set_CF(scratch2_uint & 1 << (TOP_BIT - scratch_uint)))
+                    OPCODE 3: // RCR
+                        tmpvar1 = readmem(rm_addr);
+                        R_M_OP(tmpvar1, += (readregs8(FLAG_CF) << (TOP_BIT - scratch_uint)) + , scratch2_uint << (1 + TOP_BIT - scratch_uint));
+                        writemem(rm_addr, tmpvar1);
+                        set_CF(scratch2_uint & 1 << (scratch_uint - 1));
+                        set_OF(SIGN_OF(op_result) ^ SIGN_OF(op_result * 2))
+                    OPCODE 4: // SHL
+                        set_OF(SIGN_OF(op_result) ^ set_CF(SIGN_OF(op_dest << (scratch_uint - 1))))
+                    OPCODE 5: // SHR
+                        set_OF(SIGN_OF(op_dest))
+                    OPCODE 7: // SAR
+                        scratch_uint < TOP_BIT || set_CF(scratch2_uint);
+                        set_OF(0);
+                        tmpvar1 = readmem(rm_addr);
+                        R_M_OP(tmpvar1, +=, scratch2_uint *= ~(((1 << TOP_BIT) - 1) >> scratch_uint));
+                        writemem(rm_addr, tmpvar1);
+                }
             OPCODE 13: // LOOPxx|JCZX
                 tmpvar1 = readregs16(REG_CX);
                 writeregs16(REG_CX, tmpvar1-1);
