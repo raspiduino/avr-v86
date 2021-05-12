@@ -19,7 +19,7 @@
 #include "cpu.h"
 
 // Emulator vars
-unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar;
+unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar, rep_mode;
 unsigned short reg_ip;
 unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source;
 int op_result, scratch_int;
@@ -68,6 +68,16 @@ int op_result, scratch_int;
 #define ADC_SBB_MACRO(a) OP(a##= readregs8(FLAG_CF) +), \
                          set_CF(readregs8(FLAG_CF) && (op_result == op_dest) || (a op_result < a(int)op_dest)), \
                          set_AF_OF_arith()
+
+#define DAA_DAS(op1,op2,mask,minval) tmpvar1 = readregs8(REG_AL), \
+                                     set_AF((((scratch2_uint = readregs8(REG_AL)) & 0x0F) > 9) || readregs8(FLAG_AF)) && (op_result = tmpvar1 op1 6, set_CF(readregs8(FLAG_CF) || (tmpvar1 op2 scratch2_uint))), \
+                                     writeregs8(REG_AL, tmpvar1), \
+                                     tmpvar1 = readregs8(REG_AL), \
+                                     set_CF((((mask & 1 ? scratch2_uint : readregs8(REG_AL)) & mask) > minval) || readregs8(FLAG_CF)) && (op_result = tmpvar1 op1 0x60), \
+                                     writeregs8(REG_AL, tmpvar1)
+
+// Increment or decrement a register #reg_id (usually SI or DI), depending on direction flag and operand size (given by i_w)
+#define INDEX_INC(reg_id) writeregs16(reg_id, (readregs16(reg_id) - (2 * readregs8(FLAG_DF) - 1)*(i_w + 1)))
 
 // Convert raw opcode to translated opcode index. This condenses a large number of different encodings of similar
 // instructions into a much smaller number of distinct functions, which we then execute
@@ -162,6 +172,13 @@ char pc_interrupt(unsigned char interrupt_num)
     writeregs8(FLAG_TF, 0);
     writeregs8(FLAG_IF, 0);
     return 0;
+}
+
+// Set emulated CPU FLAGS register from regs8[FLAG_xx] values
+void set_flags(int new_flags)
+{
+    for (int i = 9; i--;)
+        writeregs8(FLAG_CF + i, !!(1 << bios_table_lookup(TABLE_FLAGS_BITFIELDS, i) & new_flags));
 }
 
 void v86()
@@ -350,6 +367,105 @@ void v86()
                 i_data1 = i_data0;
                 DECODE_RM_REG;
                 MEM_OP(op_from_addr, =, op_to_addr);
+            // OPCODE 12 here, come back later. It's too long and I'm too lazy!
+            OPCODE 13: // LOOPxx|JCZX
+                tmpvar1 = readregs16(REG_CX);
+                writeregs16(REG_CX, tmpvar1-1);
+                scratch_uint = tmpvar1-1;
+
+                switch(i_reg4bit)
+                {
+                    OPCODE_CHAIN 0: // LOOPNZ
+                        scratch_uint &= !readregs8(FLAG_ZF)
+                    OPCODE 1: // LOOPZ
+                        scratch_uint &= readregs8(FLAG_ZF)
+                    OPCODE 3: // JCXXZ
+                        tmpvar1 = readregs16(REG_CX);
+                        writeregs16(REG_CX, tmpvar1+1);
+                        scratch_uint = !tmpvar1+1;
+                }
+                reg_ip += scratch_uint*(char)i_data0;
+            OPCODE 14: // JMP | CALL short/near
+                reg_ip += 3 - i_d;
+                if (!i_w)
+                {
+                    if (i_d) // JMP far
+                        reg_ip = 0,
+                        writeregs16(REG_CS, i_data2);
+                    else // CALL
+                        r_m_push(reg_ip);
+                }
+                reg_ip += i_d && i_w ? (char)i_data0 : i_data0;
+            OPCODE 15: // TEST reg, r/m
+                MEM_OP(op_from_addr, &, op_to_addr);
+            OPCODE 16: // XCHG AX, regs16
+                i_w = 1;
+                op_to_addr = REGS_BASE;
+                op_from_addr = GET_REG_ADDR(i_reg4bit);
+            OPCODE_CHAIN 24: // NOP|XCHG reg, r/m
+                if (op_to_addr != op_from_addr)
+                    OP(^=),
+                    MEM_OP(op_from_addr, ^=, op_to_addr),
+                    OP(^=);
+            OPCODE 17: // MOVSx (extra=0)|STOSx (extra=1)|LODSx (extra=2)
+                scratch2_uint = seg_override_en ? seg_override : REG_DS;
+
+                for (scratch_uint = rep_override_en ? readregs16(REG_CX) : 1; scratch_uint; scratch_uint--)
+                {
+                    MEM_OP(extra < 2 ? segreg(REG_ES, REG_DI, 0) : REGS_BASE, =, extra & 1 ? REGS_BASE : segreg(scratch2_uint, REG_SI, 0)),
+                    extra & 1 || INDEX_INC(REG_SI),
+                    extra & 2 || INDEX_INC(REG_DI);
+                }
+
+                if (rep_override_en)
+                    writeregs16(REG_CX, 0);
+            OPCODE 18: // CMPSx (extra=0)|SCASx (extra=1)
+                scratch2_uint = seg_override_en ? seg_override : REG_DS;
+
+                if ((scratch_uint = rep_override_en ? readregs16(REG_CX) : 1))
+                {
+                    for (; scratch_uint; rep_override_en || scratch_uint--)
+                    {
+                        MEM_OP(extra ? REGS_BASE : segreg(scratch2_uint, REG_SI,0), -, segreg(REG_ES, REG_DI,0)),
+                        extra || INDEX_INC(REG_SI),
+                        tmpvar1 = readregs16(REG_CX),
+                        writeregs16(REG_CX, tmpvar1-1),
+                        INDEX_INC(REG_DI), rep_override_en && !((tmpvar1 - 1) && (!op_result == rep_mode)) && (scratch_uint = 0);
+                    }
+
+                    set_flags_type = FLAGS_UPDATE_SZP | FLAGS_UPDATE_AO_ARITH; // Funge to set SZP/AO flags
+                    set_CF(op_result > op_dest);
+                }
+            OPCODE 19: // RET|RETF|IRET
+                i_d = i_w;
+                r_m_pop(reg_ip);
+                if (extra) // IRET|RETF|RETF imm16
+                    r_m_pop(readregs16(REG_CS));
+                if (extra & 2) // IRET
+                    set_flags(r_m_pop(scratch_uint));
+                else if (!i_d) // RET|RETF imm16
+                    writeregs16(REG_SP, readregs16(REG_SP)+i_data0);
+            OPCODE 20: // MOV r/m, immed
+                tmpvar1 = readmem(op_from_addr);
+                R_M_OP(tmpvar1, =, i_data2);
+                writemem(op_from_addr, tmpvar1);
+            // Opcode 21 here, come back later
+            // Opcode 22 here, come back later
+            OPCODE 23: // REPxx
+                rep_override_en = 2;
+                rep_mode = i_w;
+                seg_override_en && seg_override_en++;
+            OPCODE 25: // PUSH reg
+                r_m_push(readregs16(extra));
+            OPCODE 26: // POP reg
+                r_m_pop(readregs16(extra));
+            OPCODE 27: // xS: segment overrides
+                seg_override_en = 2;
+                seg_override = extra;
+                rep_override_en && rep_override_en++;
+            OPCODE 28: // DAA/DAS
+                i_w = 0;
+                extra ? DAA_DAS(-=, >=, 0xFF, 0x99) : DAA_DAS(+=, <, 0xF0, 0x90); // extra = 0 for DAA, 1 for DAS
             
         }
     }
