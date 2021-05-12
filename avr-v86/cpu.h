@@ -26,4 +26,6 @@ char set_AF_OF_arith();
 char set_AF(int new_AF);
 char set_OF(int new_OF);
 unsigned short segreg(int reg_seg, int reg_ofs, int op);
+void make_flags();
+char pc_interrupt(unsigned char interrupt_num);
 void v86();

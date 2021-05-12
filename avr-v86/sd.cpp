@@ -56,10 +56,7 @@ void loadbios()
 // Load instruction decoding helper table
 unsigned char bios_table_lookup(unsigned int i, unsigned int j)
 {
-    file.open(BIOS_FILE, O_READ); // Open BIOS file
-    file.seekSet(0x81 + i); // Set seek to 0x81 + i
-    file.seekSet((unsigned int)file.read() + j); // Set seek to the value read in the location 0x81 + i
-    return file.read(); // Read that value and return
+    return readregs8(readregs16(0x81 + i) + j);
 }
 
 #ifdef HARDDISK
@@ -82,30 +79,37 @@ unsigned char readmem(unsigned short addr)
     return val; // Return that value
 }
 
-void writemem(unsigned short addr, unsigned short value)
+unsigned char writemem(unsigned short addr, unsigned char value)
 {
     // Write the value to memory at the addr
     file.open(RAM_FILE, O_WRITE); // Open virtual ram file in write mode
     file.seekSet(addr); // Seek to addr
     file.write(value, 1); // Write the value to file
     file.close();
+    return value;
 }
 
-unsigned short readregs(unsigned short addr)
+unsigned char readregs8(unsigned short addr)
 {
     // Read regs at addr
-    file.open(RAM_FILE, O_READ); // Open virtual ram file in read mode
-    file.seekSet(REGS_BASE + addr); // Seek
-    unsigned short val = file.read(); // Read
-    file.close(); // Close the file
-    return val; // Return
+    return readmem(REGS_BASE + addr);
 }
 
-void writeregs(unsigned short addr, unsigned short value)
+unsigned char writeregs8(unsigned short addr, unsigned char value)
 {
     // Write regs at addr
-    file.open(RAM_FILE, O_WRITE); // Open virtual ram file in write mode
-    file.seekSet(REGS_BASE + addr); // Seek
-    file.write(value); // Write
-    file.close(); // Close the file
+    return writemem(REGS_BASE + addr, value);
+}
+
+unsigned short readregs16(unsigned short addr)
+{
+    return ((unsigned short)readregs8(addr) << 8) | readregs8(addr + 1); // Read 2 unsigned char and convert to 1 unsigned short
+}
+
+unsigned short writeregs16(unsigned short addr, unsigned short value)
+{
+    // Convert a unsigned short to 2 unsigned char and write
+    writeregs8(addr, value & 0xff);
+    writeregs8(addr+1, (value >> 8));
+    return value;
 }

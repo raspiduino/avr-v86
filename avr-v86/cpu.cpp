@@ -22,7 +22,7 @@
 unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar;
 unsigned short reg_ip;
 unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source;
-int op_result;
+int op_result, scratch_int;
 
 // Helper macros
 
@@ -34,7 +34,7 @@ int op_result;
 
 // Decode mod, r_m and reg fields in instruction
 #define DECODE_RM_REG scratch2_uint = 4 * !i_mod, \
-                      op_to_addr = rm_addr = i_mod < 3 ? segreg(seg_override_en ? seg_override : bios_table_lookup(scratch2_uint + 3, i_rm), bios_table_lookup(scratch2_uint, i_rm), +readregs(bios_table_lookup(scratch2_uint + 1, i_rm))+bios_table_lookup(scratch2_uint + 2, i_rm)*i_data1) : GET_REG_ADDR(i_rm), \
+                      op_to_addr = rm_addr = i_mod < 3 ? segreg(seg_override_en ? seg_override : bios_table_lookup(scratch2_uint + 3, i_rm), bios_table_lookup(scratch2_uint, i_rm), +readregs16(bios_table_lookup(scratch2_uint + 1, i_rm))+bios_table_lookup(scratch2_uint + 2, i_rm)*i_data1) : GET_REG_ADDR(i_rm), \
                       op_from_addr = GET_REG_ADDR(i_reg), \
                       i_d && (scratch_uint = op_from_addr, op_from_addr = rm_addr, op_to_addr = scratch_uint)
 
@@ -50,8 +50,21 @@ int op_result;
                             R_M_OP(tmpvar1,op,tmpvar2), \
                             writemem(dest, tmpvar1)
 
+#define OP(op) MEM_OP(op_to_addr,op,op_from_addr)
+
 // Returns number of top bit in operand (i.e. 8 for 8-bit operands, 16 for 16-bit operands)
 #define TOP_BIT 8*(i_w + 1)
+
+// [I]MUL/[I]DIV/DAA/DAS/ADC/SBB helpers
+#define MUL_MACRO(op_data_type,out_regs) (set_opcode(0x10), \
+                                          out_regs ? writeregs16(i_w + 1, (op_result = (op_data_type)readmem[rm_addr] * (op_data_type)readregs16(0)) >> 16) \
+                                                   : writeregs8(i_w + 1, (op_result = (op_data_type)readmem[rm_addr] * (op_data_type)readregs8(0)) >> 16), \
+                                          writeregs16(REG_AX, op_result), \
+                                          set_OF(set_CF(op_result - (op_data_type)op_result)))
+
+#define DIV_MACRO(out_data_type,in_data_type,out_regs) out_regs ? ((scratch_int = (out_data_type)readmem(rm_addr)) && !(scratch2_uint = (in_data_type)(scratch_uint = (readregs16(i_w+1) << 16) + readregs16(REG_AX)) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? writeregs16(i_w+1, scratch_uint - scratch_int * (writeregs16(0, scratch2_uint))) : pc_interrupt(0)) \
+                                                                : ((scratch_int = (out_data_type)readmem(rm_addr)) && !(scratch2_uint = (in_data_type)(scratch_uint = (readregs8(i_w+1) << 16) + readregs16(REG_AX)) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? writeregs8(i_w+1, scratch_uint - scratch_int * (writeregs8(0, scratch2_uint))) : pc_interrupt(0))
+
 
 // Convert raw opcode to translated opcode index. This condenses a large number of different encodings of similar
 // instructions into a much smaller number of distinct functions, which we then execute
@@ -79,7 +92,7 @@ unsigned char r_m_push(unsigned short a)
 unsigned char r_m_pop(unsigned short a)
 {
     i_w = 1;
-    writeregs(REG_SP, readregs(REG_SP) + 2);
+    writeregs16(REG_SP, readregs16(REG_SP) + 2);
     tmpvar1 = tmpvar2 = readmem(segreg(REG_SS, REG_SP, -2));
     R_M_OP(a, =, tmpvar1);
     if (tmpvar1 != tmpvar2)
@@ -90,16 +103,22 @@ unsigned char r_m_pop(unsigned short a)
     return tmpvar1;
 }
 
+// Set carry flag
+char set_CF(int new_CF)
+{
+    writeregs8(FLAG_CF, !!new_CF);
+}
+
 // Set auxiliary flag
 char set_AF(int new_AF)
 {
-    writeregs(FLAG_AF, !!new_AF);
+    writeregs8(FLAG_AF, !!new_AF);
 }
 
 // Set overflow flag
 char set_OF(int new_OF)
 {
-    writeregs(FLAG_OF, !!new_OF);
+    writeregs8(FLAG_OF, !!new_OF);
 }
 
 // Set auxiliary and overflow flag after arithmetic operations
@@ -109,13 +128,37 @@ char set_AF_OF_arith()
     if (op_result == op_dest)
         return set_OF(0);
     else
-        return set_OF(1 & (readregs(FLAG_CF) ^ op_source >> (TOP_BIT - 1)));
+        return set_OF(1 & (readregs8(FLAG_CF) ^ op_source >> (TOP_BIT - 1)));
 }
 
 // Convert segment:offset to linear address in emulator memory space
 unsigned short segreg(int reg_seg, int reg_ofs, int op)
 {
-    return 16 * readregs(reg_seg) + (unsigned short)(readregs(reg_ofs) + op);
+    return 16 * readregs16(reg_seg) + (unsigned short)(readregs16(reg_ofs) + op);
+}
+
+// Assemble and return emulated CPU FLAGS register in scratch_uint
+void make_flags()
+{
+    scratch_uint = 0xF002; // 8086 has reserved and unused flags set to 1
+    for (int i = 9; i--;)
+        scratch_uint += readregs8(FLAG_CF + i) << bios_table_lookup(TABLE_FLAGS_BITFIELDS, i);
+}
+
+// Execute INT #interrupt_num on the emulated machine
+char pc_interrupt(unsigned char interrupt_num)
+{
+    set_opcode(0xCD); // Decode like INT
+
+    make_flags();
+    r_m_push(scratch_uint);
+    r_m_push(readregs16(REG_CS));
+    r_m_push(reg_ip);
+    MEM_OP(REGS_BASE + 2 * REG_CS, =, 4 * interrupt_num + 2);
+    R_M_OP(reg_ip, =, readmem[4 * interrupt_num]);
+    writeregs8(FLAG_TF, 0);
+    writeregs8(FLAG_IF, 0);
+    return 0;
 }
 
 void v86()
@@ -123,17 +166,17 @@ void v86()
     // Main emulator function
 
     // CS is initialised to F000
-    writeregs(REG_CS, 0xF000);
+    writeregs16(REG_CS, 0xF000);
 
     // Trap flag off
-    writeregs(FLAG_TF, 0);
+    writeregs8(FLAG_TF, 0);
 
     // Set DL equal to the boot device: 0 for the FD, or 0x80 for the HD. Normally, boot from the HD, but you can change to 0 (FD) if you want
-    writeregs(REG_DL, 0x80);
+    writeregs8(REG_DL, 0x80);
 
     #ifdef HARDDISK
     // Set CX:AX equal to the hard disk image size, if present
-    writeregs(REG_AX, hdsize());
+    writeregs16(REG_AX, hdsize());
     #endif
 
     // Load BIOS image into F000:0100, and set IP to 0100
@@ -141,7 +184,7 @@ void v86()
     reg_ip = 0x100;
 
     // Instruction execution loop
-    for(; opcode_stream = readmem(16 * readregs(REG_CS) + reg_ip);)
+    for(; opcode_stream = readmem(16 * readregs16(REG_CS) + reg_ip);)
     {
         // Set up variables to prepare for decoding an opcode
         set_opcode(opcode_stream);
@@ -184,16 +227,16 @@ void v86()
             OPCODE_CHAIN 0: // Conditional jump (JAE, JNAE, etc.)
                 // i_w is the invert flag, e.g. i_w == 1 means JNAE, whereas i_w == 0 means JAE 
                 scratch_uchar = raw_opcode_id / 2 & 7;
-                reg_ip += (char)i_data0 * (i_w ^ ((unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_A, scratch_uchar)) || (unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_B, scratch_uchar)) || (unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_C, scratch_uchar)) ^ (unsigned char)readregs(bios_table_lookup(TABLE_COND_JUMP_DECODE_D, scratch_uchar))));
+                reg_ip += (char)i_data0 * (i_w ^ ((unsigned char)readregs8(bios_table_lookup(TABLE_COND_JUMP_DECODE_A, scratch_uchar)) || (unsigned char)readregs8(bios_table_lookup(TABLE_COND_JUMP_DECODE_B, scratch_uchar)) || (unsigned char)readregs8(bios_table_lookup(TABLE_COND_JUMP_DECODE_C, scratch_uchar)) ^ (unsigned char)readregs16(bios_table_lookup(TABLE_COND_JUMP_DECODE_D, scratch_uchar))));
             OPCODE 1: // MOV reg, imm
                 i_w = !!(raw_opcode_id & 8);
                 tmpvar1 = tmpvar2 = readmem(GET_REG_ADDR(i_reg4bit));
                 R_M_OP(tmpvar1, =, i_data0);
                 writemem(GET_REG_ADDR(i_reg4bit), tmpvar1);
             OPCODE 3: // PUSH regs16
-                r_m_push(readregs(i_reg4bit));
+                r_m_push(readregs16(i_reg4bit));
             OPCODE 4: // POP regs16
-                r_m_pop(readregs(i_reg4bit));
+                r_m_pop(readregs16(i_reg4bit));
             OPCODE 2: // INC|DEC regs16
                 i_w = 1;
                 i_d = 0;
@@ -209,16 +252,43 @@ void v86()
                     set_OF(op_dest + 1 - i_reg == 1 << (TOP_BIT - 1)),
                     (xlat_opcode_id == 5) && (set_opcode(0x10), 0); // Decode like ADC
                 else if (i_reg != 6) // JMP|CALL
-                    i_reg - 3 || r_m_push(readregs(REG_CS)), // CALL (far)
+                    i_reg - 3 || r_m_push(readregs16(REG_CS)), // CALL (far)
                     i_reg & 2 && r_m_push(reg_ip + 2 + i_mod*(i_mod != 3) + 2*(!i_mod && i_rm == 6)), // CALL (near or far)
                     i_reg & 1 && readmem(op_from_addr + 2),
-                    writeregs(REG_CS, readmem(op_from_addr + 2)), // JMP|CALL (far)
+                    writeregs16(REG_CS, readmem(op_from_addr + 2)), // JMP|CALL (far)
                     tmpvar1 = readmem(op_from_addr),
                     R_M_OP(reg_ip, =, tmpvar1),
                     set_opcode(0x9A); // Decode like CALL
                 else // PUSH
                     tmpvar1 = readmem(rm_addr);
                     r_m_push(tmpvar1);
+            OPCODE 6: // TEST r/m, imm16 / NOT|NEG|MUL|IMUL|DIV|IDIV reg
+                op_to_addr = op_from_addr;
+
+                switch (i_reg)
+                {
+                    OPCODE_CHAIN 0: // TEST
+                        set_opcode(0x20); // Decode like AND
+                        reg_ip += i_w + 1;
+                        tmpvar1 = readmem(op_to_addr);
+                        R_M_OP(tmpvar1, &, i_data2);
+                        writemem(op_to_addr, tmpvar1);
+                    OPCODE 2: // NOT
+                        OP(=~)
+                    OPCODE 3: // NEG
+                        OP(=-);
+                        op_dest = 0;
+                        set_opcode(0x28); // Decode like SUB
+                        set_CF(op_result > op_dest)
+                    OPCODE 4: // MUL
+                        i_w ? MUL_MACRO(unsigned short, 1) : MUL_MACRO(unsigned char, 0)
+                    OPCODE 5: // IMUL
+                        i_w ? MUL_MACRO(short, 1) : MUL_MACRO(char, 0)
+                    OPCODE 6: // DIV
+                        i_w ? DIV_MACRO(unsigned short, unsigned, 1) : DIV_MACRO(unsigned char, unsigned short, 0)
+                    OPCODE 7: // IDIV
+                        i_w ? DIV_MACRO(short, int, 1) : DIV_MACRO(char, short, 0);
+                }
         }
     }
 }

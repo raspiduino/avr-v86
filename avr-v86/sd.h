@@ -27,8 +27,9 @@ unsigned short hdsize();
 #endif
 
 unsigned char readmem(unsigned short addr);
-void writemem(unsigned short addr, unsigned short value);
-unsigned short readregs(unsigned short addr);
-void writeregs(unsigned short addr, unsigned short value);
-
+unsigned char writemem(unsigned short addr, unsigned char value);
+unsigned char readregs8(unsigned short addr);
+unsigned char writeregs8(unsigned short addr, unsigned char value);
+unsigned short readregs16(unsigned short addr);
+unsigned short writeregs16(unsigned short addr, unsigned short value);
 unsigned char bios_table_lookup(unsigned int i, unsigned int j);
