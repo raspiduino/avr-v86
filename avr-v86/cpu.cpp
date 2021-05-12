@@ -65,6 +65,9 @@ int op_result, scratch_int;
 #define DIV_MACRO(out_data_type,in_data_type,out_regs) out_regs ? ((scratch_int = (out_data_type)readmem(rm_addr)) && !(scratch2_uint = (in_data_type)(scratch_uint = (readregs16(i_w+1) << 16) + readregs16(REG_AX)) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? writeregs16(i_w+1, scratch_uint - scratch_int * (writeregs16(0, scratch2_uint))) : pc_interrupt(0)) \
                                                                 : ((scratch_int = (out_data_type)readmem(rm_addr)) && !(scratch2_uint = (in_data_type)(scratch_uint = (readregs8(i_w+1) << 16) + readregs16(REG_AX)) / scratch_int, scratch2_uint - (out_data_type)scratch2_uint) ? writeregs8(i_w+1, scratch_uint - scratch_int * (writeregs8(0, scratch2_uint))) : pc_interrupt(0))
 
+#define ADC_SBB_MACRO(a) OP(a##= readregs8(FLAG_CF) +), \
+                         set_CF(readregs8(FLAG_CF) && (op_result == op_dest) || (a op_result < a(int)op_dest)), \
+                         set_AF_OF_arith()
 
 // Convert raw opcode to translated opcode index. This condenses a large number of different encodings of similar
 // instructions into a much smaller number of distinct functions, which we then execute
@@ -289,6 +292,65 @@ void v86()
                     OPCODE 7: // IDIV
                         i_w ? DIV_MACRO(short, int, 1) : DIV_MACRO(char, short, 0);
                 }
+            OPCODE 7: // ADD|OR|ADC|SBB|AND|SUB|XOR|CMP AL/AX, immed
+                rm_addr = REGS_BASE;
+                i_data2 = i_data0;
+                i_mod = 3;
+                i_reg = extra;
+                reg_ip--;
+            OPCODE_CHAIN 8: // ADD|OR|ADC|SBB|AND|SUB|XOR|CMP reg, immed
+                op_to_addr = rm_addr;
+                writeregs16(REG_SCRATCH, (i_d |= !i_w) ? (char)i_data2 : i_data2);
+                op_from_addr = REGS_BASE + 2 * REG_SCRATCH;
+                reg_ip += !i_d + 1;
+                set_opcode(0x08 * (extra = i_reg));
+            OPCODE_CHAIN 9: // ADD|OR|ADC|SBB|AND|SUB|XOR|CMP|MOV reg, r/m
+                switch (extra)
+                {
+                    OPCODE_CHAIN 0: // ADD
+                        OP(+=),
+                        set_CF(op_result < op_dest)
+                    OPCODE 1: // OR
+                        OP(|=)
+                    OPCODE 2: // ADC
+                        ADC_SBB_MACRO(+)
+                    OPCODE 3: // SBB
+                        ADC_SBB_MACRO(-)
+                    OPCODE 4: // AND
+                        OP(&=)
+                    OPCODE 5: // SUB
+                        OP(-=),
+                        set_CF(op_result > op_dest)
+                    OPCODE 6: // XOR
+                        OP(^=)
+                    OPCODE 7: // CMP
+                        OP(-),
+                        set_CF(op_result > op_dest)
+                    OPCODE 8: // MOV
+                        OP(=);
+                }
+            OPCODE 10: // MOV sreg, r/m | POP r/m | LEA reg, r/m
+                if (!i_w) // MOV
+                    i_w = 1,
+                    i_reg += 8,
+                    DECODE_RM_REG,
+                    OP(=);
+                else if (!i_d) // LEA
+                    seg_override_en = 1,
+                    seg_override = REG_ZERO,
+                    DECODE_RM_REG,
+                    tmpvar1 = readmem(op_from_addr),
+                    R_M_OP(tmpvar1, =, rm_addr),
+                    writemem(op_from_addr, tmpvar1);
+                else // POP
+                    r_m_pop(readmem(rm_addr));
+            OPCODE 11: // MOV AL/AX, [loc]
+                i_mod = i_reg = 0;
+                i_rm = 6;
+                i_data1 = i_data0;
+                DECODE_RM_REG;
+                MEM_OP(op_from_addr, =, op_to_addr);
+            
         }
     }
 }
