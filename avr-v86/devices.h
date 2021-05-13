@@ -20,3 +20,4 @@
 #include "config.h"
 
 void terminal_putchar(unsigned char value);
+unsigned char getch();

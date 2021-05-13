@@ -22,3 +22,11 @@ void terminal_putchar(unsigned char value)
 {
     Serial.print((char)value);
 }
+
+unsigned char getch()
+{
+    if(Serial.available() > 0)
+    {
+        return Serial.read();
+    }
+}

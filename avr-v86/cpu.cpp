@@ -19,9 +19,9 @@
 #include "cpu.h"
 
 // Emulator vars
-unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar, rep_mode, io_ports[IO_PORT_COUNT], io_hi_lo, spkr_en;
+unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar, rep_mode, io_ports[IO_PORT_COUNT], io_hi_lo, spkr_en, int8_asap, trap_flag;
 unsigned short reg_ip;
-unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source, GRAPHICS_X, GRAPHICS_Y;
+unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source, GRAPHICS_X, GRAPHICS_Y, inst_counter;
 int op_result, scratch_int;
 
 // Helper macros
@@ -663,5 +663,20 @@ void v86()
             if (set_flags_type & FLAGS_UPDATE_OC_LOGIC)
                 set_CF(0), set_OF(0);
         }
+
+        // Poll timer/keyboard every KEYBOARD_TIMER_UPDATE_DELAY instructions
+        if (!(++inst_counter % KEYBOARD_TIMER_UPDATE_DELAY))
+            int8_asap = 1;
+
+        // Application has set trap flag, so fire INT 1
+        if (trap_flag)
+            pc_interrupt(1);
+        
+        trap_flag = readregs8(FLAG_TF);
+
+        // If a timer tick is pending, interrupts are enabled, and no overrides/REP are active,
+        // then process the tick and check for new keystrokes
+        if (int8_asap && !seg_override_en && !rep_override_en && readregs8(FLAG_IF) && !readregs8(FLAG_TF))
+            pc_interrupt(0xA), int8_asap = 0, writemem(0x4A6, getch()), pc_interrupt(7);
     }
 }
