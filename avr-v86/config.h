@@ -19,7 +19,6 @@
 #define RAM_FILE "ram.bin" // Contain RAM data & memory mapped things
 #define BIOS_FILE "bios.bin" // You must use the bios from 8086tiny (https://github.com/adriancable/8086tiny) project in order to make this emulator work!
 #define DISK_FILE "disk.img"
-#define IHT_FILE "iht.bin" // Instruction helper table file
 
 #define BOOT_DEVICE 0x80 // Select the boot device, 0 for FD and 0x80 for HD. Default is boot from HD (0x80)
 
