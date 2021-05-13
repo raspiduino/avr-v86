@@ -18,6 +18,7 @@
 
 #include <Fat16.h> // Fat16 library, you can get it at https://github.com/greiman/Fat16
 #include "config.h"
+#include "devices.h"
 
 void sdinit();
 void loadbios();

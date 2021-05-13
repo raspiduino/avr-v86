@@ -41,6 +41,7 @@
 /************************** Emulator constant. DO NOT edit! ***************************/
 
 #define REGS_BASE 0xF0000 // Register location in memory mapped mode
+#define IO_PORT_COUNT 0x10000
 
 // 16-bit register decodes
 #define REG_AX 0

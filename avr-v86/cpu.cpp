@@ -19,9 +19,9 @@
 #include "cpu.h"
 
 // Emulator vars
-unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar, rep_mode;
+unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar, rep_mode, io_ports[IO_PORT_COUNT], io_hi_lo, spkr_en;
 unsigned short reg_ip;
-unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source;
+unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source, GRAPHICS_X, GRAPHICS_Y;
 int op_result, scratch_int;
 
 // Helper macros
@@ -531,8 +531,27 @@ void v86()
                 tmpvar1 = readmem(op_from_addr);
                 R_M_OP(tmpvar1, =, i_data2);
                 writemem(op_from_addr, tmpvar1);
-            // Opcode 21 here, come back later
-            // Opcode 22 here, come back later
+            OPCODE 21: // IN AL/AX, DX/imm8
+                io_ports[0x20] = 0; // PIC EOI
+                io_ports[0x42] = --io_ports[0x40]; // PIT channel 0/2 read placeholder
+                io_ports[0x3DA] ^= 9; // CGA refresh
+                scratch_uint = extra ? readregs16(REG_DX) : (unsigned char)i_data0;
+                scratch_uint == 0x60 && (io_ports[0x64] = 0); // Scancode read flag
+                scratch_uint == 0x3D5 && (io_ports[0x3D4] >> 1 == 7) && (io_ports[0x3D5] = ((readmem(0x49E)*80 + readmem(0x49D) + (short)readmem(0x4AD)) & (io_ports[0x3D4] & 1 ? 0xFF : 0xFF00)) >> (io_ports[0x3D4] & 1 ? 0 : 8)); // CRT cursor position
+                tmpvar1 = readregs8(REG_AL);
+                R_M_OP(tmpvar1, =, io_ports[scratch_uint]);
+                writeregs8(REG_AL, tmpvar1);
+            OPCODE 22: // OUT DX/imm8, AL/AX
+                scratch_uint = extra ? readregs16(REG_DX) : (unsigned char)i_data0;
+                tmpvar1 = readregs8(REG_AL);
+                R_M_OP(io_ports[scratch_uint], =, tmpvar1);
+                scratch_uint == 0x61 && (io_hi_lo = 0, spkr_en |= readregs8(REG_AL) & 3); // Speaker control
+                (scratch_uint == 0x40 || scratch_uint == 0x42) && (io_ports[0x43] & 6) && (writemem(0x469 + scratch_uint - (io_hi_lo ^= 1), readregs8(REG_AL))); // PIT rate programming
+                //scratch_uint == 0x43 && (io_hi_lo = 0, regs8[REG_AL] >> 6 == 2) && (SDL_PauseAudio((regs8[REG_AL] & 0xF7) != 0xB6), 0); // Speaker enable
+                scratch_uint == 0x3D5 && (io_ports[0x3D4] >> 1 == 6) && (writemem(0x4AD + !(io_ports[0x3D4] & 1), readregs8(REG_AL))); // CRT video RAM start offset
+                scratch_uint == 0x3D5 && (io_ports[0x3D4] >> 1 == 7) && (scratch2_uint = ((readmem(0x49E)*80 + readmem(0x49D) + readmem(0x4AD)) & (io_ports[0x3D4] & 1 ? 0xFF00 : 0xFF)) + (readregs8(REG_AL) << (io_ports[0x3D4] & 1 ? 0 : 8)) - (short)readmem(0x4AD), writemem(0x49D, scratch2_uint % 80), writemem(0x49E, scratch2_uint / 80)); // CRT cursor position
+                scratch_uint == 0x3B5 && io_ports[0x3B4] == 1 && (GRAPHICS_X = readregs8(REG_AL) * 16); // Hercules resolution reprogramming. Defaults are set in the BIOS
+                scratch_uint == 0x3B5 && io_ports[0x3B4] == 6 && (GRAPHICS_Y = readregs8(REG_AL) * 4);
             OPCODE 23: // REPxx
                 rep_override_en = 2;
                 rep_mode = i_w;
