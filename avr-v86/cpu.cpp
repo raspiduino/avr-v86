@@ -221,10 +221,11 @@ void v86()
     reg_ip = 0x100;
 
     // Instruction execution loop
-    for(; opcode_stream = readmem(16 * readregs16(REG_CS) + reg_ip);)
+    while(true)
     {
+        opcode_stream = readmem(16 * readregs16(REG_CS) + reg_ip);
         // Set up variables to prepare for decoding an opcode
-        set_opcode(opcode_stream);
+        set_opcode(*opcode_stream);
 
         // Extract i_w and i_d fields from instruction
         i_w = (i_reg4bit = raw_opcode_id & 7) & 1;

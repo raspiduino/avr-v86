@@ -22,10 +22,11 @@
 SdCard card;
 Fat16 file;
 
-char filepath[12]; // Virtual disk filepath
-short membuffer[BUFFER]; // Memory buffer
+//char filepath[12]; // Virtual disk filepath
+char membuffer[BUFFER] = ""; // Memory buffer
 
-void sdinit(){
+void sdinit()
+{
     /* Init the SD card */
     Serial.print(F("Init SD card"));
     while(!card.begin(CHIP_SELECT)) Serial.print("."); // Mount filesystem
@@ -34,23 +35,39 @@ void sdinit(){
     Serial.println(F(". Done!"));
 }
 
+void fillmem()
+{
+    file.open(RAM_FILE, O_WRITE); // Open virtual RAM file to write
+    for(long i = 0; i <= RAM_SIZE; i++){
+        file.write((uint8_t)0); // Fill with 0
+    }
+    file.close();
+    //return 0;
+}
+
 void loadbios()
 {
     // Load BIOS image into F000:0100 (0x100 of regs8)
-    // Only need to read 0xFF00 bytes from BIOS image
+    // Only need to read 0x1DF0 bytes from BIOS image
 
-    for(int16_t i = 0; i <= 0xFF00;)
+    Serial.print("Loading BIOS");
+    
+    for(long i = 0; i <= 0x1DF5;)
     {
         file.open(BIOS_FILE, O_READ); // Open BIOS file in read mode
         i += file.read(membuffer, BUFFER); // Read to buffer
         file.close(); // Close that file
 
         // Load BIOS to virtual RAM
-        file.open(RAM_FILE, O_WRITE|O_CREAT); // Open ram file in write mode
+        file.open(RAM_FILE, O_WRITE); // Open ram file in write mode
         file.seekSet(REGS_BASE + i); // Set the cusor to the register mapped location + the byte read
         file.write(membuffer, BUFFER); // Write to virtual RAM
         file.close(); // Close that file
+
+        Serial.print(F("."));
     }
+
+    Serial.println(F("\nBooting up..."));
 }
 
 // Load instruction decoding helper table

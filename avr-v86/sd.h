@@ -22,6 +22,7 @@
 
 void sdinit();
 void loadbios();
+void fillmem();
 
 #ifdef HARDDISK
 unsigned short hdsize();

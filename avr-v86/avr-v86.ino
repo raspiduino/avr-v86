@@ -62,7 +62,7 @@ void setup() {
 
     // Init SD card
     sdinit();
-
+    
     // Start the emulator
     Serial.println(F("Starting v86..."));
     v86();

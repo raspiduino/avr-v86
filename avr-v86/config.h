@@ -18,10 +18,10 @@
 
 #define RAM_FILE "ram.bin" // Contain RAM data & memory mapped things
 #define BIOS_FILE "bios.bin" // You must use the bios from 8086tiny (https://github.com/adriancable/8086tiny) project in order to make this emulator work!
-#define DISK_FILE "disk.img"
-#define IHT_FILE "iht.bin" // Instruction helper table file
+#define DISK_FILE "disk.img" // Either FD or HD
+#define RAM_SIZE 0x10FFF0
 
-#define BOOT_DEVICE 0x80 // Select the boot device, 0 for FD and 0x80 for HD. Default is boot from HD (0x80)
+#define BOOT_DEVICE 0 // Select the boot device, 0 for FD and 0x80 for HD. Default is boot from HD (0x80)
 
 #define BUFFER 128 // Buffer for memory copy, ... in bytes
 
@@ -35,7 +35,7 @@
 #define KEYBOARD // Wait, what? Don't disable this unless you know what you are doing!
 // Note about disks:
 // You MUST't disable both floppy disk and hard disk unless you know what you are doing!
-#define HARDDISK // Enable this if you want to support hard disk
+//#define HARDDISK // Enable this if you want to support hard disk
 #define BOOT_DEVICE 0 // Boot from FD or HD. 0 for FD and 1 for HD
 
 /************************** Emulator constant. DO NOT edit! ***************************/
