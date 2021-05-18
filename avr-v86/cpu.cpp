@@ -644,7 +644,7 @@ void v86()
                         // So first it will check if the offset 'CAST(unsigned)regs16[REG_BP] << 9' exist
                         // Then read/write to that offset. This is what I forgot to port! Sorry!!
                         regs8[REG_AL] = seekandcheck(readregs8(REG_DL), (unsigned)readregs16(REG_BP) << 9)
-                            ? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk[regs8[REG_DL]], mem + SEGREG(REG_ES, REG_BX,), regs16[REG_AX])
+                            ? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(readregs8(REG_DL), readmem(SEGREG(REG_ES, REG_BX, 0)), readregs16(REG_AX))
                             : 0;
                 }
         }
