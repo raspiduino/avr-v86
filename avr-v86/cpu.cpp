@@ -217,7 +217,7 @@ void v86()
     #endif
 
     // Load BIOS image into F000:0100, and set IP to 0100
-    loadbios();
+    //loadbios();
     reg_ip = 0x100;
 
     // Instruction execution loop
@@ -639,11 +639,13 @@ void v86()
                         terminal_putchar(readregs8(REG_AL));
                     //OPCODE 1: // GET_RTC
                         // Not yet :) How can we get time from Arduino????
-                    //OPCODE 2: // DISK_READ
-                    //OPCODE_CHAIN 3: // DISK_WRITE
-                    //    regs8[REG_AL] = ~lseek(disk[regs8[REG_DL]], CAST(unsigned)regs16[REG_BP] << 9, 0)
-                    //        ? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk[regs8[REG_DL]], mem + SEGREG(REG_ES, REG_BX,), regs16[REG_AX])
-                    //        : 0;
+                    OPCODE 2: // DISK_READ
+                    OPCODE_CHAIN 3: // DISK_WRITE + READ :)))
+                        // So first it will check if the offset 'CAST(unsigned)regs16[REG_BP] << 9' exist
+                        // Then read/write to that offset. This is what I forgot to port! Sorry!!
+                        regs8[REG_AL] = seekandcheck(readregs8(REG_DL), (unsigned)readregs16(REG_BP) << 9)
+                            ? ((char)i_data0 == 3 ? (int(*)())write : (int(*)())read)(disk[regs8[REG_DL]], mem + SEGREG(REG_ES, REG_BX,), regs16[REG_AX])
+                            : 0;
                 }
         }
 

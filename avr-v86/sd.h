@@ -21,8 +21,8 @@
 #include "devices.h"
 
 void sdinit();
-void loadbios();
-void fillmem();
+//void loadbios();
+//void fillmem();
 
 #ifdef HARDDISK
 unsigned short hdsize();
@@ -35,3 +35,4 @@ unsigned char writeregs8(unsigned short addr, unsigned char value);
 unsigned short readregs16(unsigned short addr);
 unsigned short writeregs16(unsigned short addr, unsigned short value);
 unsigned char bios_table_lookup(unsigned int i, unsigned int j);
+bool seekandcheck(int disk, unsigned short addr);
