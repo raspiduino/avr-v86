@@ -17,7 +17,7 @@
 */
 
 #define RAM_FILE "ram.bin" // Contain RAM data & memory mapped things
-#define INIT_RAM "ram.init.bin"
+#define BIOS_FILE "bios.bin"
 #define DISK_FILE "disk.img" // Either FD or HD
 #define RAM_SIZE 0x10FFF0
 

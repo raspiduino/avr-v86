@@ -35,23 +35,44 @@ void sdinit()
     Serial.println(F(". Done!"));
 }
 
+void fillmem()
+{
+    Serial.print(F("Filling memory"));
+
+    file.open(RAM_FILE, O_WRITE);
+    
+    while(1)
+    {
+        file.write((byte)0); // Fill with zero
+        Serial.print(F("."));
+
+        if(file.curPosition() == RAM_SIZE)
+            break;
+    }
+
+    file.close();
+    Serial.println(F(". Done!"));
+}
+
 void loadbios()
 {
     // Load BIOS image into F000:0100 (0x100 of regs8)
     // Only need to read 0x1DF0 bytes from BIOS image
 
-    Serial.print("Loading BIOS");
+    fillmem(); // Fill mem
+    
+    Serial.print(F("Loading BIOS..."));
     
     for(long i = 0; i <= RAM_SIZE;)
     {
-        file.open(INIT_RAM, O_READ); // Open init file in read mode
+        file.open(BIOS_FILE, O_READ); // Open BIOS file in read mode
         file.seekSet(i);
         int br = file.read(membuffer, BUFFER); // Read to buffer
         file.close(); // Close that file
 
         // Load init ram to virtual RAM
         file.open(RAM_FILE, O_WRITE); // Open ram file in write mode
-        file.seekSet(i); // Set the cusor to the register mapped location + the byte read
+        file.seekSet(REGS_BASE + i); // Set the cusor to the register mapped location + the byte read
         file.write(membuffer, br); // Write to virtual RAM
         file.close(); // Close that file
 

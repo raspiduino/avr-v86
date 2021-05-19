@@ -21,6 +21,7 @@
 #include "devices.h"
 
 void sdinit();
+void fillmem();
 void loadbios();
 
 #ifdef HARDDISK
