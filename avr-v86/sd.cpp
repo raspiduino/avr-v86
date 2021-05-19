@@ -35,40 +35,36 @@ void sdinit()
     Serial.println(F(". Done!"));
 }
 
-//void fillmem()
-//{
-//    file.open(RAM_FILE, O_WRITE); // Open virtual RAM file to write
-//    for(long i = 0; i <= RAM_SIZE; i++){
-//        file.write((uint8_t)0); // Fill with 0
-//    }
-//    file.close();
-//    //return 0;
-//}
+void loadbios()
+{
+    // Load BIOS image into F000:0100 (0x100 of regs8)
+    // Only need to read 0x1DF0 bytes from BIOS image
 
-//void loadbios()
-//{
-//    // Load BIOS image into F000:0100 (0x100 of regs8)
-//    // Only need to read 0x1DF0 bytes from BIOS image
-//
-//    Serial.print("Loading BIOS");
-//    
-//    for(long i = 0; i <= 0x1DF5;)
-//    {
-//        file.open(BIOS_FILE, O_READ); // Open BIOS file in read mode
-//        i += file.read(membuffer, BUFFER); // Read to buffer
-//        file.close(); // Close that file
-//
-//        // Load BIOS to virtual RAM
-//        file.open(RAM_FILE, O_WRITE); // Open ram file in write mode
-//        file.seekSet(REGS_BASE + i); // Set the cusor to the register mapped location + the byte read
-//        file.write(membuffer, BUFFER); // Write to virtual RAM
-//        file.close(); // Close that file
-//
-//        Serial.print(F("."));
-//    }
-//
-//    Serial.println(F("\nBooting up..."));
-//}
+    Serial.print("Loading BIOS");
+    
+    for(long i = 0; i <= RAM_SIZE;)
+    {
+        file.open(INIT_RAM, O_READ); // Open init file in read mode
+        file.seekSet(i);
+        int br = file.read(membuffer, BUFFER); // Read to buffer
+        file.close(); // Close that file
+
+        // Load init ram to virtual RAM
+        file.open(RAM_FILE, O_WRITE); // Open ram file in write mode
+        file.seekSet(i); // Set the cusor to the register mapped location + the byte read
+        file.write(membuffer, br); // Write to virtual RAM
+        file.close(); // Close that file
+
+        if (br < BUFFER)
+            break;
+        else
+            i += br;
+
+        Serial.print(F("."));
+    }
+
+    Serial.println(F("\nBooting up..."));
+}
 
 // Load instruction decoding helper table
 unsigned char bios_table_lookup(unsigned int i, unsigned int j)
@@ -131,11 +127,60 @@ unsigned short writeregs16(unsigned short addr, unsigned short value)
     return value;
 }
 
-bool seekandcheck(int disk, unsigned short addr)
+bool seekandcheck(int disknum, unsigned short addr)
 {
     // Seek to the location in disk and check if it exist
-    file.open(DISK_FILE);
+    file.open(DISK_FILE, O_READ);
     bool exist = file.seekSet(addr);
     file.close();
-    return exist
+    return exist;
+}
+
+int disk(bool op, int disknum, unsigned short offset, unsigned short b)
+{
+    unsigned short i;
+    
+    if(op)
+    {
+        // Write to disk
+        for(i = 0; i <= b;){
+            file.open(RAM_FILE, O_READ);
+            file.seekSet(offset + i);
+            int br = file.read(membuffer, BUFFER);
+            file.close();
+
+            file.open(DISK_FILE, O_WRITE);
+            file.seekSet(((unsigned)readregs16(REG_BP) << 9) + i);
+            file.write(membuffer, br);
+            file.close();
+            
+            if (br < BUFFER)
+                return i + br;
+            else
+                i += br;
+        }
+    }
+
+    else
+    {
+        // Read from disk
+        for(i = 0; i <= b;){
+            file.open(DISK_FILE, O_READ);
+            file.seekSet(((unsigned)readregs16(REG_BP) << 9) + i);
+            int br = file.read(membuffer, BUFFER);
+            file.close();
+
+            file.open(RAM_FILE, O_WRITE);
+            file.seekSet(offset + i);
+            file.write(membuffer, br);
+            file.close();
+            
+            if (br < BUFFER)
+                return i + br;
+            else
+                i += br;
+        }
+    }
+
+    return i;
 }
