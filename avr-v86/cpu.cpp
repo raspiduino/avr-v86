@@ -20,7 +20,7 @@
 
 // Emulator vars
 unsigned char tmpvar1, tmpvar2, *opcode_stream, xlat_opcode_id, raw_opcode_id, extra, i_reg4bit, i_w, i_d, seg_override_en, rep_override_en, i_reg, i_mod, i_mod_size, i_rm, seg_override, scratch_uchar, rep_mode, io_ports[IO_PORT_COUNT], io_hi_lo, spkr_en, int8_asap, trap_flag;
-unsigned short reg_ip;
+unsigned short reg_ip, ip;
 unsigned int set_flags_type, i_data0, i_data1, i_data2, scratch_uint, scratch2_uint, op_to_addr, op_from_addr, rm_addr, op_dest, op_source, GRAPHICS_X, GRAPHICS_Y, inst_counter;
 int op_result, scratch_int;
 
@@ -90,6 +90,12 @@ void set_opcode(unsigned char opcode)
     extra = bios_table_lookup(TABLE_XLAT_SUBFUNCTION, opcode);
     i_mod_size = bios_table_lookup(TABLE_I_MOD_SIZE, opcode);
     set_flags_type = bios_table_lookup(TABLE_STD_FLAGS, opcode);
+    #ifdef DEBUG
+    Serial.print(F("xlat_opcode_id: "));
+    Serial.println((long)xlat_opcode_id, HEX);
+    Serial.print(F("i_mod_size: "));
+    Serial.println((long)i_mod_size, HEX);
+    #endif
 }
 
 // Helpers for stack operations
@@ -203,27 +209,41 @@ void v86()
     // Main emulator function
 
     // CS is initialised to F000
-    writeregs16(REG_CS, 0xF000);
+    regs16[REG_CS] = 0xF000;
 
     // Trap flag off
-    writeregs8(FLAG_TF, 0);
+    regs8[FLAG_TF] = 0;
 
     // Set DL equal to the boot device: 0 for the FD, or 0x80 for the HD. Normally, boot from the HD, but you can change to 0 (FD) if you want
-    writeregs8(REG_DL, 0x80);
+    regs8[REG_DL] = BOOT_DEVICE;
 
     #ifdef HARDDISK
     // Set CX:AX equal to the hard disk image size, if present
-    writeregs16(REG_AX, hdsize());
+    regs16[REG_AX] = hdsize();
     #endif
 
     // Load BIOS image into F000:0100, and set IP to 0100
-    loadbios();
+    //loadbios();
     reg_ip = 0x100;
+
+    ip = regs16[REG_CS] + reg_ip;
+    
+    //Serial.println(regs16[REG_CS] + reg_ip, HEX);
+    //Serial.write(readmem(regs16[REG_CS] + reg_ip));
 
     // Instruction execution loop
     while(true)
     {
-        opcode_stream = readmem(16 * readregs16(REG_CS) + reg_ip);
+        //opcode_stream = readmem(16 * readregs16(REG_CS) + reg_ip);
+        opcode_stream = readmem(ip);
+
+        #ifdef DEBUG
+        Serial.print(F("Instruction pointer: "));
+        Serial.println((long)ip, HEX);
+        Serial.print(F("Opcode: "));
+        Serial.println((long)opcode_stream, HEX);
+        #endif
+        
         // Set up variables to prepare for decoding an opcode
         set_opcode(*opcode_stream);
 
@@ -232,9 +252,16 @@ void v86()
         i_d = i_reg4bit / 2 & 1;
 
         // Extract instruction data fields
-        i_data0 = CAST(short)opcode_stream[1];
-        i_data1 = CAST(short)opcode_stream[2];
-        i_data2 = CAST(short)opcode_stream[3];
+        i_data0 = readmem(ip+1);
+        i_data1 = readmem(ip+2);
+        i_data2 = readmem(ip+3);
+
+        #ifdef DEBUG
+        Serial.println(F("i_data0, 1, 2: "));
+        Serial.println((long)i_data0, HEX);
+        Serial.println((long)i_data1, HEX);
+        Serial.println((long)i_data2, HEX);
+        #endif
 
         // seg_override_en and rep_override_en contain number of instructions to hold segment override and REP prefix respectively
         if (seg_override_en)

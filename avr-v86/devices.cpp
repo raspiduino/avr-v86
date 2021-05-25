@@ -30,3 +30,51 @@ unsigned char getch()
         return Serial.read();
     }
 }
+
+int disk(bool op, int disknum, unsigned short offset, unsigned short b)
+{
+    unsigned short i = 0;
+    char membuffer[BUFFER] = ""; // Memory buffer
+    
+    if(op)
+    {
+        // Write to disk
+        for(i = 0; i <= b;){
+            file = SD.open(RAM_FILE, FILE_READ);
+            file.seek(offset + i);
+            file.read(membuffer, BUFFER);
+            file.close();
+
+            file = SD.open(DISK_FILE, FILE_READ|FILE_WRITE);
+            file.seek(((unsigned)readregs16(REG_BP) << 9) + i);
+            file.write(membuffer);
+            file.close();
+            
+            i += BUFFER;
+        }
+
+        return b;
+    }
+
+    else
+    {
+        // Read from disk
+        for(i = 0; i <= b;){
+            file = SD.open(DISK_FILE, FILE_READ);
+            file.seek(((unsigned)readregs16(REG_BP) << 9) + i);
+            file.read(membuffer, BUFFER);
+            file.close();
+
+            file = SD.open(RAM_FILE, FILE_READ|FILE_WRITE);
+            file.seek(offset + i);
+            file.write(membuffer);
+            file.close();
+            
+            i += BUFFER;
+        }
+
+        return b;
+    }
+
+    return i;
+}

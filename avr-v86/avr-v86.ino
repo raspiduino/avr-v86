@@ -53,7 +53,7 @@
 */
 
 #include "cpu.h"
-#include "sd.h"
+//#include "sd.h"
 
 void setup() {
     Serial.begin(9600); // Start the serial at the default baudrate 9600bps

@@ -16,10 +16,12 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#define DEBUG // Enable this in debug mode
+
 #define RAM_FILE "ram.bin" // Contain RAM data & memory mapped things
 #define BIOS_FILE "bios.bin"
 #define DISK_FILE "disk.img" // Either FD or HD
-#define RAM_SIZE 0x10FFF0
+#define RAM_SIZE 0x10FFF0UL
 
 #define BOOT_DEVICE 0 // Select the boot device, 0 for FD and 0x80 for HD. Default is boot from HD (0x80)
 
@@ -39,8 +41,8 @@
 
 /************************** Emulator constant. DO NOT edit! ***************************/
 
-#define REGS_BASE 0xF0000 // Register location in memory mapped mode
-#define IO_PORT_COUNT 0x10000
+#define REGS_BASE 0xF0000UL // Register location in memory mapped mode
+#define IO_PORT_COUNT 0x10000UL
 #define KEYBOARD_TIMER_UPDATE_DELAY 20000
 
 // 16-bit register decodes

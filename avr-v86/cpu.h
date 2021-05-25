@@ -16,9 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "config.h"
-#include "sd.h"
+//#include "config.h"
+//#include "sd.h"
 #include "devices.h"
+//#include "regs.h"
 
 void set_opcode(unsigned char opcode);
 unsigned char r_m_push(unsigned short a);

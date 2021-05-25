@@ -16,9 +16,13 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Fat16.h> // Fat16 library, you can get it at https://github.com/greiman/Fat16
+// SD
+#include <SD.h>
+#include <SPI.h>
+
 #include "config.h"
-#include "devices.h"
+
+extern File file;
 
 void sdinit();
 void fillmem();
@@ -30,10 +34,4 @@ unsigned short hdsize();
 
 unsigned char readmem(unsigned short addr);
 unsigned char writemem(unsigned short addr, unsigned char value);
-unsigned char readregs8(unsigned short addr);
-unsigned char writeregs8(unsigned short addr, unsigned char value);
-unsigned short readregs16(unsigned short addr);
-unsigned short writeregs16(unsigned short addr, unsigned short value);
-unsigned char bios_table_lookup(unsigned int i, unsigned int j);
 bool seekandcheck(int disk, unsigned short addr);
-int disk(bool op, int disknum, unsigned short offset, unsigned short b);
