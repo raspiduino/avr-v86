@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8' standalone='yes'?>
 <WORKSPACE>
  <FRAME activewindow="0">
-  <PLACEMENT>2c0000000200000003000000ffffffffffffffffffffffffffffffff71feffff00000000d2020000d1020000</PLACEMENT>
+  <PLACEMENT>2c00000002000000030000000083ffff0083ffffffffffffffffffff71feffff00000000d2020000d1020000</PLACEMENT>
   <WINDOW type="default" module="ISIS"/>
   <WINDOW type="default" module="ARES"/>
  </FRAME>
@@ -42,7 +42,7 @@
    <POPUP w="500" x="557" flags="0000002b" y="294" h="400" pid="0" iid="2">
     <PROPERTIES/>
    </POPUP>
-   <POPUP w="226" x="148" flags="00000008" y="209" h="215" pid="3" iid="1">
+   <POPUP w="30" x="148" flags="00000008" y="209" h="16" pid="3" iid="1">
     <PROPERTIES/>
    </POPUP>
    <POPUP w="8" x="168" flags="0000000a" y="229" h="1" pid="10" iid="1">

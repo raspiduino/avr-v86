@@ -17,7 +17,7 @@
 */
 
 //#include "config.h"
-//#include "sd.h"
+#include "sd.h"
 #include "devices.h"
 //#include "regs.h"
 
@@ -34,3 +34,5 @@ char pc_interrupt(unsigned char interrupt_num);
 void set_flags(int new_flags);
 int AAA_AAS(char which_operation);
 void v86();
+int disk(bool op, int disknum, unsigned short offset, unsigned short b);
+unsigned char bios_table_lookup(unsigned char i, unsigned char j);

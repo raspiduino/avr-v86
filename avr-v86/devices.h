@@ -17,10 +17,6 @@
 */
 
 #include <Arduino.h>
-//#include "config.h"
-//#include "sd.h"
-#include "regs.h"
 
 void terminal_putchar(unsigned char value);
 unsigned char getch();
-int disk(bool op, int disknum, unsigned short offset, unsigned short b);
